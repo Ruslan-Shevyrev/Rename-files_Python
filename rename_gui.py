@@ -51,7 +51,7 @@ def configure_theme(root):
 def run():
     root = tk.Tk()
     background = configure_theme(root)
-    root.title('Переименование файлов')
+    root.title('Rename in Order')
     icon_path = Path(__file__).resolve().parent / 'assets' / 'rename-icon.png'
     root.iconphoto(True, tk.PhotoImage(master=root, file=str(icon_path)))
     root.geometry('1080x560')

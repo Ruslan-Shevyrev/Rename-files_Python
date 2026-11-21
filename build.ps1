@@ -24,7 +24,7 @@ try {
         '--onedir'
         '--windowed'
         '--noconfirm'
-        '--name', 'RenameFiles'
+        '--name', 'RenameFilesInOrder'
         '--specpath', 'build'
         '--collect-all', 'imageio_ffmpeg'
         '--icon', (Join-Path $PSScriptRoot 'assets\rename-icon.ico')
@@ -34,10 +34,10 @@ try {
     & $venvPython -m PyInstaller @buildArgs
     if ($LASTEXITCODE -ne 0) { throw 'PyInstaller build failed.' }
 
-    Write-Host 'Application: dist\RenameFiles\RenameFiles.exe'
+    Write-Host 'Application: dist\RenameFilesInOrder\RenameFilesInOrder.exe'
     if ($Zip) {
-        $archive = "dist\RenameFiles-$Version-windows-x64.zip"
-        & $venvPython -m zipfile -c $archive 'dist\RenameFiles'
+        $archive = "dist\RenameFilesInOrder-$Version-windows-x64.zip"
+        & $venvPython -m zipfile -c $archive 'dist\RenameFilesInOrder'
         if ($LASTEXITCODE -ne 0) { throw 'Could not create the release archive.' }
         Write-Host "Archive: $archive"
     }
