@@ -56,6 +56,18 @@ def configure_theme(root):
     return background
 
 
+def handle_clipboard_shortcut(event):
+    # Windows virtual key codes stay the same when the keyboard layout changes.
+    shortcuts = {0x43: '<<Copy>>', 0x58: '<<Cut>>', 0x56: '<<Paste>>'}
+    # Leave Ctrl+Alt (including AltGr) available for text input.
+    if event.state & 0x20008:
+        return
+    action = shortcuts.get(event.keycode)
+    if action is not None:
+        event.widget.event_generate(action)
+        return 'break'
+
+
 def run():
     root = tk.Tk()
     background = configure_theme(root)
@@ -170,9 +182,11 @@ def run():
     path_entry.bind('<Return>', lambda _event: refresh_preview())
     localized(ttk.Button(form, command=choose_folder), 'Обзор…').grid(row=1, column=2)
     localized(ttk.Label(form), 'Имя').grid(row=2, column=0, sticky='w', pady=10)
-    ttk.Entry(form, textvariable=name).grid(row=2, column=1, sticky='ew', padx=8, pady=10)
+    name_entry = ttk.Entry(form, textvariable=name)
+    name_entry.grid(row=2, column=1, sticky='ew', padx=8, pady=10)
     localized(ttk.Label(form), 'Начальный номер').grid(row=3, column=0, sticky='w')
-    ttk.Entry(form, textvariable=start_number, width=8).grid(row=3, column=1, sticky='w', padx=8)
+    start_number_entry = ttk.Entry(form, textvariable=start_number, width=8)
+    start_number_entry.grid(row=3, column=1, sticky='w', padx=8)
     localized(
         ttk.Checkbutton(form, variable=append_remaining), 'Добавлять невыбранные файлы в конец',
     ).grid(row=4, column=1, columnspan=2, sticky='w', padx=8, pady=(12, 0))
@@ -182,5 +196,8 @@ def run():
     ttk.Label(form, textvariable=status, style='Status.TLabel').grid(
         row=6, column=0, columnspan=3, sticky='w'
     )
+    if root.tk.call('tk', 'windowingsystem') == 'win32':
+        for entry in (path_entry, name_entry, start_number_entry):
+            entry.bind('<Control-KeyPress>', handle_clipboard_shortcut)
     path_entry.focus_set()
     root.mainloop()
