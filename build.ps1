@@ -27,6 +27,8 @@ try {
         '--name', 'RenameFiles'
         '--specpath', 'build'
         '--collect-all', 'imageio_ffmpeg'
+        '--icon', (Join-Path $PSScriptRoot 'assets\rename-icon.ico')
+        '--add-data', ((Join-Path $PSScriptRoot 'assets\rename-icon.png') + ':assets')
         'rename_files.py'
     )
     & $venvPython -m PyInstaller @buildArgs

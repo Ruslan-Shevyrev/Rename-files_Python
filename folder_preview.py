@@ -6,9 +6,9 @@ from tkinter import ttk
 from renamer import natural_key
 
 try:
-    from PIL import Image, ImageOps, ImageTk
+    from PIL import Image, ImageDraw, ImageFont, ImageOps, ImageTk
 except ImportError:
-    Image = ImageOps = ImageTk = None
+    Image = ImageDraw = ImageFont = ImageOps = ImageTk = None
 
 try:
     from imageio_ffmpeg import get_ffmpeg_exe
@@ -41,13 +41,14 @@ class FolderPreview(ttk.Frame):
     }
 
     def __init__(self, parent, navigate):
-        super().__init__(parent, padding=12)
+        super().__init__(parent, padding=12, style='Panel.TFrame')
         self.navigate = navigate
         self.folder = None
         self.folders = {}
         self.entries = {}
         self.selected_rows = {}
         self.images = {}
+        self.selection_images = {}
         self.thumbnail_job = None
         self.thumbnail_count = 0
         self.folder_status = ''
@@ -58,7 +59,9 @@ class FolderPreview(ttk.Frame):
         self.columnconfigure(0, weight=1)
         self.rowconfigure(1, weight=1)
 
-        ttk.Label(self, text='Содержимое папки').grid(row=0, column=0, sticky='w', pady=(0, 8))
+        ttk.Label(self, text='Содержимое папки', style='Heading.TLabel').grid(
+            row=0, column=0, sticky='w', pady=(0, 10),
+        )
         self.up_icon = self.make_up_icon()
         self.up_button = ttk.Button(
             self, text='Родительская папка', image=self.up_icon,
@@ -93,6 +96,7 @@ class FolderPreview(ttk.Frame):
         )
         self.tree.column('#0', width=self.THUMBNAIL_SIZE + 42, stretch=False)
         self.tree.column('filename', minwidth=80)
+        self.tree.tag_configure('chosen', background='#322456', foreground='#ffffff')
         self.tree.grid(row=1, column=0, columnspan=3, sticky='nsew')
         scrollbar = ttk.Scrollbar(self, orient='vertical', command=self.tree.yview)
         scrollbar.grid(row=1, column=3, sticky='ns')
@@ -101,7 +105,7 @@ class FolderPreview(ttk.Frame):
         self.tree.bind('<ButtonRelease-1>', self.toggle_clicked_file)
         self.tree.bind('<Return>', self.open_selected_folder)
         self.tree.bind('<space>', lambda _event: self.toggle_file(self.tree.focus()))
-        self.status = ttk.Label(self, justify='left')
+        self.status = ttk.Label(self, justify='left', style='Status.TLabel')
         self.status.grid(row=2, column=0, columnspan=4, sticky='ew', pady=(8, 0))
         self.folder_icon = self.make_icon(folder=True)
         self.file_icon = self.make_icon(folder=False)
@@ -109,28 +113,29 @@ class FolderPreview(ttk.Frame):
     def make_icon(self, folder):
         icon = tk.PhotoImage(master=self, width=44, height=44)
         if folder:
-            icon.put('#d6a64a', to=(6, 11, 20, 18))
-            icon.put('#e9bc62', to=(6, 15, 38, 34))
+            icon.put('#a184fa', to=(6, 11, 20, 18))
+            icon.put('#9164ef', to=(6, 15, 38, 34))
         else:
-            icon.put('#a0aaba', to=(11, 6, 33, 38))
-            icon.put('#eef2f7', to=(12, 7, 32, 37))
+            icon.put('#8773bc', to=(11, 6, 33, 38))
+            icon.put('#352b54', to=(12, 7, 32, 37))
             for y in (16, 21, 26):
-                icon.put('#a0aaba', to=(16, y, 28, y + 1))
+                icon.put('#b7a4ee', to=(16, y, 28, y + 1))
         return icon
 
     def make_up_icon(self):
         icon = tk.PhotoImage(master=self, width=22, height=20)
-        icon.put('#d6a64a', to=(2, 4, 10, 10))
-        icon.put('#e9bc62', to=(2, 7, 20, 17))
-        icon.put('#493a23', to=(10, 9, 12, 15))
+        icon.put('#a184fa', to=(2, 4, 10, 10))
+        icon.put('#9164ef', to=(2, 7, 20, 17))
+        icon.put('#ffffff', to=(10, 9, 12, 15))
         for offset in range(4):
-            icon.put('#493a23', to=(10 - offset, 7 + offset, 12 + offset, 8 + offset))
+            icon.put('#ffffff', to=(10 - offset, 7 + offset, 12 + offset, 8 + offset))
         return icon
 
     def show_folder(self, folder):
         self.cancel_thumbnails()
         self.tree.delete(*self.tree.get_children())
         self.images.clear()
+        self.selection_images.clear()
         self.thumbnail_count = 0
         self.folders.clear()
         self.entries.clear()
@@ -261,7 +266,39 @@ class FolderPreview(ttk.Frame):
     def set_thumbnail(self, row, thumbnail):
         if thumbnail is not None:
             self.images[row] = thumbnail
-            self.tree.item(row, image=thumbnail)
+            self.update_file_row(row)
+
+    def update_file_row(self, row):
+        thumbnail = self.images.get(row, self.file_icon)
+        number = self.selected_rows.get(row)
+        if number is None:
+            self.tree.item(row, image=thumbnail, text='', tags=())
+            self.selection_images.pop(row, None)
+            return
+        if ImageDraw is None:
+            label = chr(0x245F + number) if number <= 20 else str(number)
+            self.tree.item(row, image=thumbnail, text=label, tags=('chosen',))
+            return
+
+        diameter = 32
+        badge = Image.new('RGBA', (diameter * 2, diameter * 2))
+        draw = ImageDraw.Draw(badge)
+        draw.ellipse((1, 1, 62, 62), fill='#8050ff', outline='#c9afff', width=3)
+        label = str(number)
+        font = ImageFont.load_default(size=min(30, 84 // len(label)))
+        draw.text((32, 32), label, font=font, fill='white', anchor='mm', stroke_width=1)
+        badge = badge.resize((diameter, diameter), Image.Resampling.LANCZOS)
+        badge_image = ImageTk.PhotoImage(badge, master=self)
+        size = self.THUMBNAIL_SIZE
+        combined = tk.PhotoImage(master=self, width=diameter + 6 + size, height=size)
+        # Both Tk and Pillow thumbnails expose a Tk image name for copying.
+        combined.tk.call(str(combined), 'copy', str(badge_image), '-to', 0, (size - diameter) // 2)
+        combined.tk.call(
+            str(combined), 'copy', str(thumbnail), '-to',
+            diameter + 6 + (size - thumbnail.width()) // 2, (size - thumbnail.height()) // 2,
+        )
+        self.selection_images[row] = combined
+        self.tree.item(row, image=combined, text='', tags=('chosen',))
 
     def read_thumbnail(self, entry):
         try:
@@ -298,11 +335,13 @@ class FolderPreview(ttk.Frame):
         self.tree.focus(row)
         if row in self.selected_rows:
             del self.selected_rows[row]
-            self.tree.item(row, text='')
+            self.update_file_row(row)
         else:
-            self.selected_rows[row] = None
+            self.selected_rows[row] = 0
         for index, selected_row in enumerate(self.selected_rows, start=1):
-            self.tree.item(selected_row, text=str(index))
+            if self.selected_rows[selected_row] != index:
+                self.selected_rows[selected_row] = index
+                self.update_file_row(selected_row)
 
     def open_clicked_folder(self, event):
         self.open_folder(self.tree.identify_row(event.y))
