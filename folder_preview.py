@@ -46,6 +46,7 @@ class FolderPreview(ttk.Frame):
         self.folder = None
         self.folders = {}
         self.entries = {}
+        self.selected_rows = {}
         self.images = {}
         self.thumbnail_job = None
         self.thumbnail_count = 0
@@ -79,14 +80,27 @@ class FolderPreview(ttk.Frame):
             sort_menu.add_radiobutton(
                 label=label, value=descending, variable=self.sort_descending, command=self.sort_rows,
             )
-        ttk.Style(self).configure('FolderPreview.Treeview', rowheight=self.THUMBNAIL_SIZE + 8)
-        self.tree = ttk.Treeview(self, show='tree', style='FolderPreview.Treeview')
+        style = ttk.Style(self)
+        style.configure('FolderPreview.Treeview', rowheight=self.THUMBNAIL_SIZE + 8)
+        style.layout('FolderPreview.Treeview.Item', [
+            ('Treeitem.padding', {'sticky': 'nsew', 'children': [
+                ('Treeitem.image', {'side': 'right', 'sticky': ''}),
+                ('Treeitem.text', {'side': 'left', 'sticky': 'w'}),
+            ]}),
+        ])
+        self.tree = ttk.Treeview(
+            self, show='tree', columns=('filename',), selectmode='none', style='FolderPreview.Treeview',
+        )
+        self.tree.column('#0', width=self.THUMBNAIL_SIZE + 42, stretch=False)
+        self.tree.column('filename', minwidth=80)
         self.tree.grid(row=1, column=0, columnspan=3, sticky='nsew')
         scrollbar = ttk.Scrollbar(self, orient='vertical', command=self.tree.yview)
         scrollbar.grid(row=1, column=3, sticky='ns')
         self.tree.configure(yscrollcommand=scrollbar.set)
         self.tree.bind('<Double-1>', self.open_clicked_folder)
+        self.tree.bind('<ButtonRelease-1>', self.toggle_clicked_file)
         self.tree.bind('<Return>', self.open_selected_folder)
+        self.tree.bind('<space>', lambda _event: self.toggle_file(self.tree.focus()))
         self.status = ttk.Label(self, justify='left')
         self.status.grid(row=2, column=0, columnspan=4, sticky='ew', pady=(8, 0))
         self.folder_icon = self.make_icon(folder=True)
@@ -120,6 +134,7 @@ class FolderPreview(ttk.Frame):
         self.thumbnail_count = 0
         self.folders.clear()
         self.entries.clear()
+        self.selected_rows.clear()
         self.folder = None
         self.up_button.state(['disabled'])
         if folder is None:
@@ -154,7 +169,7 @@ class FolderPreview(ttk.Frame):
         missing_decoder = False
         for entry, is_folder in entries:
             icon = self.folder_icon if is_folder else self.file_icon
-            row = self.tree.insert('', 'end', text=entry.name, image=icon)
+            row = self.tree.insert('', 'end', values=(entry.name,), image=icon)
             self.entries[row] = entry
             if is_folder:
                 self.folders[row] = entry
@@ -270,6 +285,24 @@ class FolderPreview(ttk.Frame):
     def go_up(self):
         if self.folder is not None:
             self.navigate(self.folder.parent)
+
+    def selected_files(self):
+        return tuple(self.entries[row] for row in self.selected_rows)
+
+    def toggle_clicked_file(self, event):
+        self.toggle_file(self.tree.identify_row(event.y))
+
+    def toggle_file(self, row):
+        if row not in self.entries or not self.entries[row].is_file():
+            return
+        self.tree.focus(row)
+        if row in self.selected_rows:
+            del self.selected_rows[row]
+            self.tree.item(row, text='')
+        else:
+            self.selected_rows[row] = None
+        for index, selected_row in enumerate(self.selected_rows, start=1):
+            self.tree.item(selected_row, text=str(index))
 
     def open_clicked_folder(self, event):
         self.open_folder(self.tree.identify_row(event.y))

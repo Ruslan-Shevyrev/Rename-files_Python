@@ -8,7 +8,7 @@ def natural_key(s):
             for text in re.split(r'(\d+)', s)]
 
 
-def rename_files(folder, name, start_number=1):
+def rename_files(folder, name, start_number=1, *, selected_files=(), append_remaining=False):
     if type(start_number) is not int or start_number < 0:
         raise ValueError('Начальный номер должен быть целым числом от 0.')
     if not name or re.search(r'[<>:"/\\|?*\x00-\x1f]', name) or name.endswith('.'):
@@ -18,7 +18,14 @@ def rename_files(folder, name, start_number=1):
         (file for file in folder.iterdir() if file.is_file()),
         key=lambda file: natural_key(file.name),
     )
-    original_paths = set(files)
+    if selected_files:
+        selected = list(selected_files)
+        selected_paths = set(selected)
+        if len(selected_paths) != len(selected) or not selected_paths <= set(files):
+            raise ValueError('Выбранные файлы изменились. Обновите список и повторите выбор.')
+        remaining = [file for file in files if file not in selected_paths] if append_remaining else []
+        files = selected + remaining
+    rename_paths = set(files)
     changes = []
     for index, source in enumerate(files, start=start_number):
         # The dot after the sequence number is not an extension separator.
@@ -27,7 +34,7 @@ def rename_files(folder, name, start_number=1):
         target = folder / f'{index}. {name}{suffix}'
         if source.name == target.name:
             continue
-        if target not in original_paths and (target.exists() or target.is_symlink()):
+        if target not in rename_paths and (target.exists() or target.is_symlink()):
             raise ValueError(f'Имя уже занято: {target.name}')
         changes.append((source, target))
     if not changes:

@@ -23,6 +23,7 @@ def run():
     path = tk.StringVar(value=str(Path(launch_file).resolve().parent))
     name = tk.StringVar()
     start_number = tk.StringVar(value='1')
+    append_remaining = tk.BooleanVar(value=False)
     status = tk.StringVar()
     refresh_job = None
 
@@ -63,7 +64,12 @@ def run():
                 first_number = int(start_number.get())
             except ValueError:
                 raise ValueError('Начальный номер должен быть целым числом от 0.') from None
-            count = rename_files(Path(folder), name.get().strip(), start_number=first_number)
+            folder = Path(folder).absolute()
+            selected = preview.selected_files() if folder == preview.folder else ()
+            count = rename_files(
+                folder, name.get().strip(), start_number=first_number,
+                selected_files=selected, append_remaining=append_remaining.get(),
+            )
         except (OSError, ValueError) as error:
             messagebox.showerror('Ошибка переименования', str(error), parent=root)
             return
@@ -79,9 +85,12 @@ def run():
     ttk.Entry(form, textvariable=name).grid(row=1, column=1, sticky='ew', padx=8)
     ttk.Label(form, text='Начальный номер').grid(row=2, column=0, sticky='w')
     ttk.Entry(form, textvariable=start_number, width=8).grid(row=2, column=1, sticky='w', padx=8)
+    ttk.Checkbutton(
+        form, text='Добавлять невыбранные файлы в конец', variable=append_remaining,
+    ).grid(row=3, column=1, columnspan=2, sticky='w', padx=8, pady=(8, 0))
     ttk.Button(form, text='Переименовать', command=submit).grid(
-        row=3, column=1, columnspan=2, sticky='e', pady=(4, 8)
+        row=4, column=1, columnspan=2, sticky='e', pady=(4, 8)
     )
-    ttk.Label(form, textvariable=status).grid(row=4, column=0, columnspan=3, sticky='w')
+    ttk.Label(form, textvariable=status).grid(row=5, column=0, columnspan=3, sticky='w')
     path_entry.focus_set()
     root.mainloop()
