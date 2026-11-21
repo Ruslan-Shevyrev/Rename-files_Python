@@ -1,3 +1,4 @@
+import sys
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
@@ -9,24 +10,25 @@ from renamer import rename_files
 def run():
     root = tk.Tk()
     root.title('Переименование файлов')
-    root.geometry('920x560')
-    root.minsize(680, 360)
+    root.geometry('1080x560')
+    root.minsize(760, 360)
     root.columnconfigure(0, weight=1)
     root.rowconfigure(0, weight=1)
 
-    panes = ttk.Panedwindow(root, orient='horizontal')
+    panes = tk.PanedWindow(root, orient='horizontal', sashwidth=5, borderwidth=0)
     panes.grid(sticky='nsew')
     form = ttk.Frame(panes, padding=16)
     form.columnconfigure(1, weight=1)
-    path = tk.StringVar()
+    launch_file = sys.executable if getattr(sys, 'frozen', False) else __file__
+    path = tk.StringVar(value=str(Path(launch_file).resolve().parent))
     name = tk.StringVar()
     start_number = tk.StringVar(value='1')
     status = tk.StringVar()
     refresh_job = None
 
     preview = FolderPreview(panes, lambda folder: path.set(str(folder)))
-    panes.add(preview, weight=3)
-    panes.add(form, weight=2)
+    panes.add(preview, width=460, minsize=280, stretch='always')
+    panes.add(form, width=615, minsize=380, stretch='always')
 
     def refresh_preview():
         nonlocal refresh_job
@@ -69,7 +71,7 @@ def run():
         refresh_preview()
 
     ttk.Label(form, text='Папка').grid(row=0, column=0, sticky='w')
-    path_entry = ttk.Entry(form, textvariable=path, width=24)
+    path_entry = ttk.Entry(form, textvariable=path, width=34)
     path_entry.grid(row=0, column=1, sticky='ew', padx=8)
     path_entry.bind('<Return>', lambda _event: refresh_preview())
     ttk.Button(form, text='Обзор…', command=choose_folder).grid(row=0, column=2)

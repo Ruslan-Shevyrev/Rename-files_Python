@@ -45,28 +45,50 @@ class FolderPreview(ttk.Frame):
         self.navigate = navigate
         self.folder = None
         self.folders = {}
+        self.entries = {}
         self.images = {}
         self.thumbnail_job = None
         self.thumbnail_count = 0
         self.folder_status = ''
         self.frame_worker = ThreadPoolExecutor(max_workers=1)
         self.pending_frame = None
+        self.sort_field = tk.StringVar(master=self, value='name')
+        self.sort_descending = tk.BooleanVar(master=self, value=False)
         self.columnconfigure(0, weight=1)
         self.rowconfigure(1, weight=1)
 
         ttk.Label(self, text='Содержимое папки').grid(row=0, column=0, sticky='w', pady=(0, 8))
-        self.up_button = ttk.Button(self, text='Вверх', command=self.go_up, state='disabled')
-        self.up_button.grid(row=0, column=1, sticky='e', pady=(0, 8))
+        self.up_icon = self.make_up_icon()
+        self.up_button = ttk.Button(
+            self, text='Родительская папка', image=self.up_icon,
+            command=self.go_up, state='disabled',
+        )
+        self.up_button.grid(row=0, column=1, sticky='e', padx=(8, 4), pady=(0, 8))
+        sort_button = ttk.Menubutton(self, text='Сортировка')
+        sort_button.grid(row=0, column=2, sticky='e', pady=(0, 8))
+        sort_menu = tk.Menu(sort_button, tearoff=False)
+        sort_button.configure(menu=sort_menu)
+        for label, field in (
+            ('Имя', 'name'), ('Дата изменения', 'modified'), ('Тип', 'type'), ('Размер', 'size')
+        ):
+            sort_menu.add_radiobutton(
+                label=label, value=field, variable=self.sort_field, command=self.sort_rows,
+            )
+        sort_menu.add_separator()
+        for label, descending in (('По возрастанию', False), ('По убыванию', True)):
+            sort_menu.add_radiobutton(
+                label=label, value=descending, variable=self.sort_descending, command=self.sort_rows,
+            )
         ttk.Style(self).configure('FolderPreview.Treeview', rowheight=self.THUMBNAIL_SIZE + 8)
         self.tree = ttk.Treeview(self, show='tree', style='FolderPreview.Treeview')
-        self.tree.grid(row=1, column=0, columnspan=2, sticky='nsew')
+        self.tree.grid(row=1, column=0, columnspan=3, sticky='nsew')
         scrollbar = ttk.Scrollbar(self, orient='vertical', command=self.tree.yview)
-        scrollbar.grid(row=1, column=2, sticky='ns')
+        scrollbar.grid(row=1, column=3, sticky='ns')
         self.tree.configure(yscrollcommand=scrollbar.set)
         self.tree.bind('<Double-1>', self.open_clicked_folder)
         self.tree.bind('<Return>', self.open_selected_folder)
         self.status = ttk.Label(self, justify='left')
-        self.status.grid(row=2, column=0, columnspan=3, sticky='ew', pady=(8, 0))
+        self.status.grid(row=2, column=0, columnspan=4, sticky='ew', pady=(8, 0))
         self.folder_icon = self.make_icon(folder=True)
         self.file_icon = self.make_icon(folder=False)
 
@@ -82,12 +104,22 @@ class FolderPreview(ttk.Frame):
                 icon.put('#a0aaba', to=(16, y, 28, y + 1))
         return icon
 
+    def make_up_icon(self):
+        icon = tk.PhotoImage(master=self, width=22, height=20)
+        icon.put('#d6a64a', to=(2, 4, 10, 10))
+        icon.put('#e9bc62', to=(2, 7, 20, 17))
+        icon.put('#493a23', to=(10, 9, 12, 15))
+        for offset in range(4):
+            icon.put('#493a23', to=(10 - offset, 7 + offset, 12 + offset, 8 + offset))
+        return icon
+
     def show_folder(self, folder):
         self.cancel_thumbnails()
         self.tree.delete(*self.tree.get_children())
         self.images.clear()
         self.thumbnail_count = 0
         self.folders.clear()
+        self.entries.clear()
         self.folder = None
         self.up_button.state(['disabled'])
         if folder is None:
@@ -118,12 +150,12 @@ class FolderPreview(ttk.Frame):
         self.folder = folder
         if folder.parent != folder:
             self.up_button.state(['!disabled'])
-        entries.sort(key=lambda item: (not item[1], natural_key(item[0].name)))
         thumbnails = []
         missing_decoder = False
         for entry, is_folder in entries:
             icon = self.folder_icon if is_folder else self.file_icon
             row = self.tree.insert('', 'end', text=entry.name, image=icon)
+            self.entries[row] = entry
             if is_folder:
                 self.folders[row] = entry
                 continue
@@ -147,8 +179,33 @@ class FolderPreview(ttk.Frame):
             self.status.configure(text=f'{self.folder_status}\nЗагрузка миниатюр…')
         else:
             self.status.configure(text=self.folder_status)
+        self.sort_rows()
         thumbnails.sort(key=lambda item: item[1].suffix.lower() in self.VIDEO_SUFFIXES)
         self.load_thumbnails(iter(thumbnails))
+
+    def sort_rows(self):
+        field = self.sort_field.get()
+        descending = self.sort_descending.get()
+
+        def sort_value(row):
+            entry = self.entries[row]
+            if field == 'type':
+                return entry.suffix.casefold() if row not in self.folders else ''
+            if field == 'size' and row in self.folders:
+                return 0
+            try:
+                info = entry.stat()
+            except OSError:
+                return -1
+            return info.st_mtime_ns if field == 'modified' else info.st_size
+
+        rows = sorted(
+            self.entries, key=lambda row: natural_key(self.entries[row].name), reverse=descending,
+        )
+        if field != 'name':
+            rows.sort(key=sort_value, reverse=descending)
+        rows.sort(key=lambda row: row not in self.folders)
+        self.tree.set_children('', *rows)
 
     def load_thumbnails(self, thumbnails):
         for _ in range(8):
