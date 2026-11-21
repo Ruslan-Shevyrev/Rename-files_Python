@@ -4,6 +4,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from folder_preview import FolderPreview
+from localization import translate
 from renamer import rename_files
 
 
@@ -37,6 +38,13 @@ def configure_theme(root):
                     lightcolor=accent, darkcolor=accent, padding=(16, 9),
                     font=('Segoe UI', 10, 'bold'))
     style.map('Accent.TButton', background=[('pressed', '#6336d5'), ('active', '#865cff')])
+    style.map('TCombobox', fieldbackground=[('readonly', field)],
+              foreground=[('readonly', text)], selectbackground=[('readonly', field)],
+              selectforeground=[('readonly', text)])
+    style.configure('TCombobox', background=field, bordercolor=border, arrowcolor=text,
+                    lightcolor=field, darkcolor=field, padding=4)
+    root.option_add('*TCombobox*Listbox.background', field)
+    root.option_add('*TCombobox*Listbox.foreground', text)
     style.configure('TCheckbutton', indicatorbackground=field, indicatorforeground=text,
                     indicatorbordercolor=border, padding=(0, 4))
     style.map('TCheckbutton', indicatorbackground=[('selected', accent)],
@@ -71,9 +79,32 @@ def run():
     start_number = tk.StringVar(value='1')
     append_remaining = tk.BooleanVar(value=False)
     status = tk.StringVar()
+    language = tk.StringVar(value='Русский')
+    last_count = None
+    labels = []
+
+    def current_language():
+        return 'en' if language.get() == 'English' else 'ru'
+
+    def tr(message, **values):
+        return translate(current_language(), message, **values)
+
+    def localized(widget, message):
+        labels.append((widget, message))
+        widget.configure(text=tr(message))
+        return widget
+
+    def update_language(_event):
+        for widget, message in labels:
+            widget.configure(text=tr(message))
+        preview.update_language()
+        update_status()
+
+    def update_status():
+        status.set('' if last_count is None else tr('Переименовано файлов: {count}', count=last_count))
     refresh_job = None
 
-    preview = FolderPreview(panes, lambda folder: path.set(str(folder)))
+    preview = FolderPreview(panes, lambda folder: path.set(str(folder)), tr)
     panes.add(preview, width=460, minsize=280, stretch='always')
     panes.add(form, width=615, minsize=380, stretch='always')
 
@@ -95,49 +126,57 @@ def run():
     refresh_preview()
 
     def choose_folder():
-        selected = filedialog.askdirectory(parent=root)
+        selected = filedialog.askdirectory(parent=root, title=tr('Выберите папку'))
         if selected:
             path.set(selected)
             refresh_preview()
 
     def submit():
-        status.set('')
+        nonlocal last_count
+        last_count = None
+        update_status()
         try:
             folder = path.get().strip()
             if not folder:
-                raise ValueError('Укажите папку с файлами.')
+                raise ValueError(tr('Укажите папку с файлами.'))
             try:
                 first_number = int(start_number.get())
             except ValueError:
-                raise ValueError('Начальный номер должен быть целым числом от 0.') from None
+                raise ValueError(tr('Начальный номер должен быть целым числом от 0.')) from None
             folder = Path(folder).absolute()
             selected = preview.selected_files() if folder == preview.folder else ()
-            count = rename_files(
+            last_count = rename_files(
                 folder, name.get().strip(), start_number=first_number,
                 selected_files=selected, append_remaining=append_remaining.get(),
+                language=current_language(),
             )
         except (OSError, ValueError) as error:
-            messagebox.showerror('Ошибка переименования', str(error), parent=root)
+            messagebox.showerror(tr('Ошибка переименования'), str(error), parent=root)
             return
-        status.set(f'Переименовано файлов: {count}')
+        update_status()
         refresh_preview()
 
-    ttk.Label(form, text='Параметры переименования', style='Heading.TLabel').grid(
-        row=0, column=0, columnspan=3, sticky='w', pady=(0, 18)
+    header = ttk.Frame(form)
+    header.grid(row=0, column=0, columnspan=3, sticky='ew', pady=(0, 18))
+    localized(ttk.Label(header, style='Heading.TLabel'), 'Параметры переименования').pack(side='left')
+    language_picker = ttk.Combobox(
+        header, textvariable=language, values=('Русский', 'English'), state='readonly', width=8,
     )
-    ttk.Label(form, text='Папка').grid(row=1, column=0, sticky='w')
+    language_picker.pack(side='right', padx=(8, 0))
+    language_picker.bind('<<ComboboxSelected>>', update_language)
+    localized(ttk.Label(form), 'Папка').grid(row=1, column=0, sticky='w')
     path_entry = ttk.Entry(form, textvariable=path, width=34)
     path_entry.grid(row=1, column=1, sticky='ew', padx=8)
     path_entry.bind('<Return>', lambda _event: refresh_preview())
-    ttk.Button(form, text='Обзор…', command=choose_folder).grid(row=1, column=2)
-    ttk.Label(form, text='Имя').grid(row=2, column=0, sticky='w', pady=10)
+    localized(ttk.Button(form, command=choose_folder), 'Обзор…').grid(row=1, column=2)
+    localized(ttk.Label(form), 'Имя').grid(row=2, column=0, sticky='w', pady=10)
     ttk.Entry(form, textvariable=name).grid(row=2, column=1, sticky='ew', padx=8, pady=10)
-    ttk.Label(form, text='Начальный номер').grid(row=3, column=0, sticky='w')
+    localized(ttk.Label(form), 'Начальный номер').grid(row=3, column=0, sticky='w')
     ttk.Entry(form, textvariable=start_number, width=8).grid(row=3, column=1, sticky='w', padx=8)
-    ttk.Checkbutton(
-        form, text='Добавлять невыбранные файлы в конец', variable=append_remaining,
+    localized(
+        ttk.Checkbutton(form, variable=append_remaining), 'Добавлять невыбранные файлы в конец',
     ).grid(row=4, column=1, columnspan=2, sticky='w', padx=8, pady=(12, 0))
-    ttk.Button(form, text='Переименовать', style='Accent.TButton', command=submit).grid(
+    localized(ttk.Button(form, style='Accent.TButton', command=submit), 'Переименовать').grid(
         row=5, column=1, columnspan=2, sticky='e', pady=(18, 8)
     )
     ttk.Label(form, textvariable=status, style='Status.TLabel').grid(

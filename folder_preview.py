@@ -40,9 +40,10 @@ class FolderPreview(ttk.Frame):
         '.3gp', '.flv', '.mts', '.m2ts', '.ts',
     }
 
-    def __init__(self, parent, navigate):
+    def __init__(self, parent, navigate, translate):
         super().__init__(parent, padding=12, style='Panel.TFrame')
         self.navigate = navigate
+        self.translate = translate
         self.folder = None
         self.folders = {}
         self.entries = {}
@@ -51,7 +52,8 @@ class FolderPreview(ttk.Frame):
         self.selection_images = {}
         self.thumbnail_job = None
         self.thumbnail_count = 0
-        self.folder_status = ''
+        self.folder_messages = []
+        self.folder_values = {}
         self.frame_worker = ThreadPoolExecutor(max_workers=1)
         self.pending_frame = None
         self.sort_field = tk.StringVar(master=self, value='name')
@@ -59,18 +61,20 @@ class FolderPreview(ttk.Frame):
         self.columnconfigure(0, weight=1)
         self.rowconfigure(1, weight=1)
 
-        ttk.Label(self, text='Содержимое папки', style='Heading.TLabel').grid(
+        self.heading = ttk.Label(self, style='Heading.TLabel')
+        self.heading.grid(
             row=0, column=0, sticky='w', pady=(0, 10),
         )
         self.up_icon = self.make_up_icon()
         self.up_button = ttk.Button(
-            self, text='Родительская папка', image=self.up_icon,
+            self, image=self.up_icon,
             command=self.go_up, state='disabled',
         )
         self.up_button.grid(row=0, column=1, sticky='e', padx=(8, 4), pady=(0, 8))
-        sort_button = ttk.Menubutton(self, text='Сортировка')
+        sort_button = self.sort_button = ttk.Menubutton(self)
         sort_button.grid(row=0, column=2, sticky='e', pady=(0, 8))
-        sort_menu = tk.Menu(sort_button, tearoff=False)
+        sort_menu = self.sort_menu = tk.Menu(sort_button, tearoff=False)
+        self.sort_labels = {}
         sort_button.configure(menu=sort_menu)
         for label, field in (
             ('Имя', 'name'), ('Дата изменения', 'modified'), ('Тип', 'type'), ('Размер', 'size')
@@ -78,11 +82,13 @@ class FolderPreview(ttk.Frame):
             sort_menu.add_radiobutton(
                 label=label, value=field, variable=self.sort_field, command=self.sort_rows,
             )
+            self.sort_labels[sort_menu.index('end')] = label
         sort_menu.add_separator()
         for label, descending in (('По возрастанию', False), ('По убыванию', True)):
             sort_menu.add_radiobutton(
                 label=label, value=descending, variable=self.sort_descending, command=self.sort_rows,
             )
+            self.sort_labels[sort_menu.index('end')] = label
         style = ttk.Style(self)
         style.configure('FolderPreview.Treeview', rowheight=self.THUMBNAIL_SIZE + 8)
         style.layout('FolderPreview.Treeview.Item', [
@@ -109,6 +115,20 @@ class FolderPreview(ttk.Frame):
         self.status.grid(row=2, column=0, columnspan=4, sticky='ew', pady=(8, 0))
         self.folder_icon = self.make_icon(folder=True)
         self.file_icon = self.make_icon(folder=False)
+        self.update_language()
+
+    def update_language(self):
+        self.heading.configure(text=self.translate('Содержимое папки'))
+        self.up_button.configure(text=self.translate('Родительская папка'))
+        self.sort_button.configure(text=self.translate('Сортировка'))
+        for index, label in self.sort_labels.items():
+            self.sort_menu.entryconfigure(index, label=self.translate(label))
+        self.update_status()
+
+    def update_status(self):
+        self.status.configure(text='\n'.join(
+            self.translate(message, **self.folder_values) for message in self.folder_messages
+        ))
 
     def make_icon(self, folder):
         icon = tk.PhotoImage(master=self, width=44, height=44)
@@ -142,8 +162,10 @@ class FolderPreview(ttk.Frame):
         self.selected_rows.clear()
         self.folder = None
         self.up_button.state(['disabled'])
+        self.folder_values = {}
         if folder is None:
-            self.status.configure(text='Выберите папку или введите путь.')
+            self.folder_messages = ['Выберите папку или введите путь.']
+            self.update_status()
             return
         self.list_folder(folder)
 
@@ -164,7 +186,8 @@ class FolderPreview(ttk.Frame):
         try:
             entries = [(entry, entry.is_dir()) for entry in folder.iterdir()]
         except (OSError, ValueError):
-            self.status.configure(text='Не удалось открыть папку. Проверьте путь.')
+            self.folder_messages = ['Не удалось открыть папку. Проверьте путь.']
+            self.update_status()
             return
 
         self.folder = folder
@@ -191,14 +214,14 @@ class FolderPreview(ttk.Frame):
                     thumbnails.append((row, entry))
                 else:
                     missing_decoder = True
-        self.folder_status = f'Объектов: {len(entries)}' if entries else 'Папка пуста.'
+        self.folder_messages = ['Объектов: {count}' if entries else 'Папка пуста.']
+        self.folder_values = {'count': len(entries)}
         if missing_decoder:
-            self.folder_status += '\nВ запущенном Python отсутствует декодер миниатюр.'
+            self.folder_messages.append('В запущенном Python отсутствует декодер миниатюр.')
         self.thumbnail_count = len(thumbnails)
         if thumbnails:
-            self.status.configure(text=f'{self.folder_status}\nЗагрузка миниатюр…')
-        else:
-            self.status.configure(text=self.folder_status)
+            self.folder_messages.append('Загрузка миниатюр…')
+        self.update_status()
         self.sort_rows()
         thumbnails.sort(key=lambda item: item[1].suffix.lower() in self.VIDEO_SUFFIXES)
         self.load_thumbnails(iter(thumbnails))
@@ -233,10 +256,9 @@ class FolderPreview(ttk.Frame):
             if item is None:
                 self.thumbnail_job = None
                 if self.thumbnail_count:
-                    self.status.configure(
-                        text=f'{self.folder_status}\nМиниатюр загружено: '
-                             f'{len(self.images)} из {self.thumbnail_count}'
-                    )
+                    self.folder_messages[-1] = 'Миниатюр загружено: {loaded} из {total}'
+                    self.folder_values.update(loaded=len(self.images), total=self.thumbnail_count)
+                    self.update_status()
                 return
             row, entry = item
             suffix = entry.suffix.lower()

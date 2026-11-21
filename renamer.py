@@ -2,17 +2,19 @@ import re
 from pathlib import Path
 from tempfile import mkdtemp
 
+from localization import translate
+
 
 def natural_key(s):
     return [int(text) if text.isdecimal() else text.lower()
             for text in re.split(r'(\d+)', s)]
 
 
-def rename_files(folder, name, start_number=1, *, selected_files=(), append_remaining=False):
+def rename_files(folder, name, start_number=1, *, selected_files=(), append_remaining=False, language='ru'):
     if type(start_number) is not int or start_number < 0:
-        raise ValueError('Начальный номер должен быть целым числом от 0.')
+        raise ValueError(translate(language, 'Начальный номер должен быть целым числом от 0.'))
     if not name or re.search(r'[<>:"/\\|?*\x00-\x1f]', name) or name.endswith('.'):
-        raise ValueError('Введите имя без запрещённых символов и точки в конце.')
+        raise ValueError(translate(language, 'Введите имя без запрещённых символов и точки в конце.'))
 
     files = sorted(
         (file for file in folder.iterdir() if file.is_file()),
@@ -22,7 +24,7 @@ def rename_files(folder, name, start_number=1, *, selected_files=(), append_rema
         selected = list(selected_files)
         selected_paths = set(selected)
         if len(selected_paths) != len(selected) or not selected_paths <= set(files):
-            raise ValueError('Выбранные файлы изменились. Обновите список и повторите выбор.')
+            raise ValueError(translate(language, 'Выбранные файлы изменились. Обновите список и повторите выбор.'))
         remaining = [file for file in files if file not in selected_paths] if append_remaining else []
         files = selected + remaining
     rename_paths = set(files)
@@ -35,7 +37,7 @@ def rename_files(folder, name, start_number=1, *, selected_files=(), append_rema
         if source.name == target.name:
             continue
         if target not in rename_paths and (target.exists() or target.is_symlink()):
-            raise ValueError(f'Имя уже занято: {target.name}')
+            raise ValueError(translate(language, 'Имя уже занято: {name}', name=target.name))
         changes.append((source, target))
     if not changes:
         return 0
@@ -51,7 +53,7 @@ def rename_files(folder, name, start_number=1, *, selected_files=(), append_rema
             staged.append((source, temporary))
         for (_, temporary), (_, target) in zip(staged, changes):
             if target.exists() or target.is_symlink():
-                raise FileExistsError(f'Имя уже занято: {target.name}')
+                raise FileExistsError(translate(language, 'Имя уже занято: {name}', name=target.name))
             temporary.rename(target)
             completed.append((target, temporary))
     except OSError:
@@ -60,12 +62,13 @@ def rename_files(folder, name, start_number=1, *, selected_files=(), append_rema
                 target.rename(temporary)
             for source, temporary in reversed(staged):
                 if source.exists() or source.is_symlink():
-                    raise FileExistsError(f'Имя уже занято: {source.name}')
+                    raise FileExistsError(translate(language, 'Имя уже занято: {name}', name=source.name))
                 temporary.rename(source)
         except OSError as error:
             raise OSError(
-                f'Не удалось полностью восстановить исходные имена. '
-                f'Проверьте папки {folder} и {staging}.\n{error}'
+                translate(language, 'Не удалось полностью восстановить исходные имена. '
+                          'Проверьте папки {folder} и {staging}.\n{error}',
+                          folder=folder, staging=staging, error=error)
             ) from error
         staging.rmdir()
         raise
