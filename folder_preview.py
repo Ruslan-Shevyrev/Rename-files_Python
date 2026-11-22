@@ -3,7 +3,7 @@ import tkinter as tk
 from concurrent.futures import ThreadPoolExecutor
 from tkinter import ttk
 
-from renamer import natural_key
+from renamer import file_suffix, natural_key
 
 try:
     from PIL import Image, ImageDraw, ImageFont, ImageOps, ImageTk
@@ -107,6 +107,10 @@ class FolderPreview(ttk.Frame):
         scrollbar = ttk.Scrollbar(self, orient='vertical', command=self.tree.yview)
         scrollbar.grid(row=1, column=3, sticky='ns')
         self.tree.configure(yscrollcommand=scrollbar.set)
+        self.context_menu = tk.Menu(self.tree, tearoff=False)
+        self.context_file = None
+        self.context_menu.add_command(command=self.copy_file_name)
+        self.tree.bind('<Button-3>', self.open_file_menu)
         self.tree.bind('<Double-1>', self.open_clicked_folder)
         self.tree.bind('<ButtonRelease-1>', self.toggle_clicked_file)
         self.tree.bind('<Return>', self.open_selected_folder)
@@ -123,6 +127,7 @@ class FolderPreview(ttk.Frame):
         self.sort_button.configure(text=self.translate('Сортировка'))
         for index, label in self.sort_labels.items():
             self.sort_menu.entryconfigure(index, label=self.translate(label))
+        self.context_menu.entryconfigure(0, label=self.translate('Скопировать текущее имя файла'))
         self.update_status()
 
     def update_status(self):
@@ -340,6 +345,23 @@ class FolderPreview(ttk.Frame):
                 return source.subsample(factor)
         except (OSError, ValueError, tk.TclError):
             return None
+
+    def open_file_menu(self, event):
+        entry = self.entries.get(self.tree.identify_row(event.y))
+        if entry is None or not entry.is_file():
+            return
+        self.context_file = entry
+        try:
+            self.context_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            self.context_menu.grab_release()
+
+    def copy_file_name(self):
+        entry = self.context_file
+        if entry is None:
+            return
+        self.clipboard_clear()
+        self.clipboard_append(entry.name.removesuffix(file_suffix(entry.name)))
 
     def go_up(self):
         if self.folder is not None:

@@ -11,6 +11,7 @@ ENGLISH = {
     "Переименовать": "Rename",
     "Содержимое папки": "Folder contents",
     "Родительская папка": "Parent folder",
+    "Скопировать текущее имя файла": "Copy current file name",
     "Сортировка": "Sort",
     "Дата изменения": "Date modified",
     "Тип": "Type",

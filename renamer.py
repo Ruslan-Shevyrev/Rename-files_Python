@@ -10,6 +10,11 @@ def natural_key(s):
             for text in re.split(r'(\d+)', s)]
 
 
+def file_suffix(filename):
+    # The dot after the sequence number is not an extension separator.
+    return Path(re.sub(r'^\d+\. ', '', filename)).suffix
+
+
 def rename_files(folder, name, start_number=1, *, selected_files=(), append_remaining=False, language='ru'):
     if type(start_number) is not int or start_number < 0:
         raise ValueError(translate(language, 'Начальный номер должен быть целым числом от 0.'))
@@ -30,9 +35,7 @@ def rename_files(folder, name, start_number=1, *, selected_files=(), append_rema
     rename_paths = set(files)
     changes = []
     for index, source in enumerate(files, start=start_number):
-        # The dot after the sequence number is not an extension separator.
-        unnumbered_name = re.sub(r'^\d+\. ', '', source.name)
-        suffix = Path(unnumbered_name).suffix
+        suffix = file_suffix(source.name)
         target = folder / f'{index}. {name}{suffix}'
         if source.name == target.name:
             continue
