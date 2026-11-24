@@ -43,7 +43,14 @@ The build requires 64-bit Python. The script installs dependencies in `.venv` an
 To also create a ZIP for distribution, run the following command.
 
 ```powershell
-.\build.ps1 -Zip -Version v1.0.0
+.\build.ps1 -Zip -Version v{VERSION}
 ```
 
-The archive is saved as `dist\RenameFilesInOrder-v1.0.0-windows-x64.zip`. When you push a new version tag such as `v1.0.0`, GitHub Actions runs the same build and attaches the ZIP to the release.
+The archive is saved as `dist\RenameFilesInOrder-v{VERSION}-windows-x64.zip`. When you push a new version tag such as `{VERSION}`, GitHub Actions runs the same build and attaches the ZIP to the release.
+
+<table>
+	<tr>
+		<td valign="center" width="49%"><img src="https://github.com/Ruslan-Shevyrev/Ruslan-Shevyrev/blob/main/logoRS/logo_mini.gif" title="logo"></td>
+		<td valign="center" width="49%"><img src="https://github.com/Ruslan-Shevyrev/Ruslan-Shevyrev/blob/main/logoRS/logoRS_FULL.png" title="RuslanShevyrev"></td>
+	</tr>
+</table>

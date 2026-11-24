@@ -41,7 +41,7 @@ python -m venv .venv
 Чтобы дополнительно создать ZIP для распространения:
 
 ```powershell
-.\build.ps1 -Zip -Version v1.0.0
+.\build.ps1 -Zip -Version v{VERSION}
 ```
 
-Архив появится в `dist\RenameFilesInOrder-v1.0.0-windows-x64.zip`. При отправке нового тега вида `v1.0.0` GitHub Actions запускает ту же сборку и прикрепляет ZIP к релизу.
+Архив появится в `dist\RenameFilesInOrder-v{VERSION}-windows-x64.zip`. При отправке нового тега вида `v{VERSION}` GitHub Actions запускает ту же сборку и прикрепляет ZIP к релизу.
